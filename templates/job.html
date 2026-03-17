@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="title is-4 has-text-centered">Procesando…</h2>
+<div class="loader"></div>
+
+<script>
+  const jobId = "{{ job_id }}";
+
+  async function checkStatus() {
+    const res = await fetch(`/api/jobs/${jobId}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.status === "finished") {
+        // Redirigimos a la vista final
+        window.location.href = `/done/${jobId}`;
+        return;
+      }
+    }
+    setTimeout(checkStatus, 3000);
+  }
+  checkStatus();
+</script>
+{% endblock %}
+

@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="title is-3 has-text-centered">¡Transcripción lista!</h2>
+
+<p class="has-text-centered mb-5">
+  Tu archivo ha sido procesado correctamente. Por favor, tenga en cuenta que, por motivos de seguridad, solo puede descargarlo una vez, después de eso deberá de hacer todo el procesamiento de nuevo si lo pierde.
+</p>
+
+<div class="buttons is-centered">
+  <a href="/download/{{ job_id }}" class="button is-success is-large">
+    Descargar transcripción
+  </a>
+  <a href="/" class="button is-light is-large">
+    Volver a inicio
+  </a>
+</div>
+{% endblock %}

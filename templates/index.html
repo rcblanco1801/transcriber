@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="title is-3 has-text-centered">Subir audio para transcripción</h1>
+
+<!--   Acepta solo extensiones permitidas -->
+<form id="form" action="/transcribe" method="post" enctype="multipart/form-data">
+  <div class="file has-name is-boxed is-fullwidth">
+    <label class="file-label">
+      <input  id="file-input"
+              class="file-input"
+              type="file"
+              name="file"
+              accept=".wav,.mp3,.flac,.aac,.m4a,.ogg,.opus,.webm,.mp4,.mkv,.mov,.avi"
+              required>
+      <span class="file-cta"><span class="file-label">Elegir audio…</span></span>
+      <span id="file-name" class="file-name">Ningún archivo</span>
+    </label>
+  </div>
+
+  <p id="err" class="help is-danger is-hidden">
+    Extensión no soportada. Solo .wav, .mp3, .flac, .aac, .m4a, .ogg, .opus, .webm, 
+    .mp4, .mkv, .mov, .avi
+  </p>
+
+  <div class="field mt-4">
+    <label class="label">Modelo</label>
+    <div class="select is-fullwidth">
+      <select name="model_type">
+        <option value="small">Modelo pequeño (más rápido, menos preciso)</option>
+        <option value="large">Modelo grande (más lento, más preciso)</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Desactivado por defecto -->
+  <button id="submit-btn" class="button is-primary is-fullwidth mt-4" type="submit" disabled>
+    Transcribir
+  </button>
+</form>
+
+<script>
+const allowed = [".wav", ".mp3", ".flac", ".aac", ".m4a", 
+    ".ogg", ".opus", ".webm", ".mp4", ".mkv", ".mov", ".avi"]; 
+const fileInput = document.getElementById("file-input");
+const fileName = document.getElementById("file-name");
+const submitBtn = document.getElementById("submit-btn");
+const errMsg = document.getElementById("err");
+
+fileInput.addEventListener("change", () => {
+  if (!fileInput.files.length) return;             // nada seleccionado
+  const name = fileInput.files[0].name;
+  fileName.textContent = name;
+
+  const ext = name.slice(name.lastIndexOf(".")).toLowerCase();
+  const ok = allowed.includes(ext);
+
+  submitBtn.disabled = !ok;                        // Bloquear / desbloquear
+  errMsg.classList.toggle("is-hidden", ok);        // Mostrar mensaje
+});
+</script>
+{% endblock %}

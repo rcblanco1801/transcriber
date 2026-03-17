@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>Transcriptor</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.0/css/bulma.min.css">
+  <link rel="stylesheet" href="{{ url_for('static', path='spinner.css') }}">
+</head>
+<body>
+  <!-- Sección a pantalla completa -->
+  <section class="hero is-fullheight">
+    <div class="hero-body">
+      <!-- Centrado horizontal -->
+      <div class="container">
+        <div class="columns is-centered">
+          <div class="column is-10-mobile is-8-tablet is-6-desktop">
+            <!-- Cajita con sombra -->
+            <div class="box">
+              {% block content %}{% endblock %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</body>
+</html>
