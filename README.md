@@ -5,6 +5,8 @@ El problema que pretendemos resolver con la aplicación que tenemos entre manos 
 
 Un aspecto importante a tener en cuenta es que, a diferencia de la aplicación de scraping (en el caso de haberse leído su documentación), aquí sí que podríamos tener, en principio, múltiples usuarios pidiendo servicio. Debido a que nuestros recursos son limitados, y que, a priori, no deberíamos tener muchas peticiones simultáneas (por lo que nos interesa más permitir el acceso de la tarea a la mayor cantidad de cómputo posible para agilizar el procesamiento de los modelos), el esquema concurrente es meramente una **cola** y solo podrá haber un proceso al mismo tiempo, pero se mantendrán las diferentes peticiones para ir procesándolas en orden de entrada.
 
+Hay un apunte **importante** a tener en cuenta, y es que, a nivel de uso, el usuario **debe** tener cuidado de no perder la URL con el ID de su tarea (de la forma ```http://10.1.1.202:8001/jobs/855f7b05bef14b3b86e4b1fc5bd73852```), ya que no tendrá manera de acceder a su tarea en progreso si la pierde.
+
 ## Detalles de la implementación a nivel de sistemas
 | | |
 |--|--|
@@ -131,7 +133,7 @@ Pese a que la pipeline nos viene mayormente proporcionada por la librería Whisp
 
 ![Pipeline tal y como aparece en la documentación de WhisperX](./docs/pipeline.png)
 
-La última parte es la diarización. Esta parte sí es particularmente relevante ya que forma parte de nuestros requisitos. En ella, la segmentación a nivel de fonema se convierte a una segmentación a nivel de interlocutor detectado, por medio de un toolkit que, en este caso, sí nos proporciona la propia librería (el cual es ```pyannote-audio```). La variable ```spk``` se refiere a los interlocutores detectados por la diarización, que se combinan con los segmentos obtenidos por el alineado. El objeto devuelto es un ```AlignedTranscriptionResult```. Explorando la documentación de WhisperX, tenemos que:
+La última parte es la diarización. Esta parte sí es particularmente relevante ya que forma parte de nuestros requisitos. En ella, la segmentación a nivel de fonema se convierte a una segmentación a nivel de interlocutor detectado, por medio de un toolkit que, en este caso, sí nos proporciona la propia librería (el cual es ```pyannote-audio```). La variable ```spk``` se refiere a los interlocutores detectados por la diarización, que se combinan con los segmentos obtenidos por el alineado. El objeto devuelto es un ```AlignedTranscriptionResult```. Explorando el código de WhisperX, tenemos que:
 
 ```python
 class AlignedTranscriptionResult(TypedDict) {
@@ -209,10 +211,101 @@ Como se puede ver, esta función simplemente lanza una tarea transcriptora (reco
 .
 ```
 
+Como se mencionó con anterioridad, necesitamos algún tipo de esquema concurrente que nos permita el manejo de peticiones web procedentes de diversos usuarios. El problema reside en que las peticiones HTTP tienen caducidad, por lo que necesitamos mantener en memoria una cola que escuche a las diversas peticiones que van entrando. La solución implementada consiste en levantar un servidor ```Redis```, el cual mantiene una cola de trabajos ``q:rq.Queue``. Tenemos al servicio ```rq-worker-transcriber.service``` siempre a la escucha de nuevas peticiones que van entrando y los cambios de estado de dichas peticiones, de manera que es el trabajador encargado de ejecutar las transcripciones cuando se producen los cambios de estado pertinentes. Por otro lado, el propio servidor ```Redis``` tiene también asociado un servicio ```redis.service```, el cual simplemente mantiene la cola de peticiones en memoria (mantiene una base de datos, fundamentalmente). El flujo de procesamiento para esta parte del backend se deja para el siguiente apartado, con el objetivo de ilustrar correctamente la lógica de comunicación con el frontend.
+
 ### Flujo de la computación del frontend
 
 La aplicación expone una interfaz web en ```http://10.1.1.202:8001``` para poder realizar peticiones de transcripción al servidor.
 
 ![Página principal de la aplicación](./docs/index.png)
 
-Como se mencionó con anterioridad, necesitamos algún tipo de esquema concurrente que nos permita el manejo de peticiones web procedentes de diversos usuarios. El problema reside en que las peticiones HTTP tienen caducidad, por lo que necesitamos mantener en memoria una cola que escuche a las diversas peticiones que van entrando. La solución implementada consiste en levantar un servidor ```Redis```
+El primer endpoint de nuestra API, ```/```, es bastante trivial y meramente llama a la función ```main::landing()```, que simplemente devuelve la vista principal ```index.html```. Dicha plantilla sí que tiene algo de código javascript, el cual añade un 'listener' que está a la escucha de cambios en el ```input``` de ficheros, de manera que el botón de 'submit' se activa si y solo si se ha subido un fichero, y también se realizan comprobaciones alrededor de la extensión del fichero; WhisperX acepta una gran cantidad de extensiones, vídeos incluidos, pero aún así nuestra aplicación cuenta con la lógica necesaria para asegurarnos de que el fichero subido es correcto, de manera que se mostrará un mensaje de error si esta condición no se cumple, y se bloqueará la ejecución de la transcripción.
+
+El siguiente endpoint, el cual es no trivial y analizaremos con más detalle, es ```/transcribe```, que tiene asociado la función ```main::enqueue_web()```:
+
+```mermaid
+sequenceDiagram
+	USER ->> UVICORN: GET /transcribe HTTP/1.1
+	UVICORN -->> MAIN: REQUEST URL("/transcribe", file, model_type)
+	MAIN -->> UVICORN: TEMPLATE("job.html", job_id)
+	UVICORN -->> USER: HTTP/1.1 200 OK {job.html}
+```
+
+![Vista de progreso de la tarea](./docs/progress.png)
+
+Merece la pena elaborar pseudocódigo para la función ```main::enqueue_web()``` para entender su lógica:
+
+```python
+def enqueue_web(upload_file, model_type) -> str {
+	job_id <- generate_id();
+	file_name <- upload_file.get_filename();
+	dest <- join(UPLOAD_DIR, f"{job_id}_{file_name}");
+	write(dest, upload_file.file);
+	job <- q.enqueue(tasks.transcribe_file, 
+						dest, model_type, job_id);
+	return f"/jobs/{job.id}";
+}
+```
+
+Básicamente, establece el trabajo, generando su ID, guarda el fichero recibido a través de la petición HTTP y encola dicho trabajo para que el 'worker' de ```Redis``` lo procese.
+
+El siguiente endpoint se trata de ```/jobs/{job_id}```, que tiene el siguiente diagrama de secuencia:
+
+```mermaid
+sequenceDiagram
+  USER ->> UVICORN: GET /jobs/{job_id} HTTP/1.1
+  UVICORN ->> MAIN: REQUEST URL("/jobs/{job_id}")
+  
+  alt try
+    alt job.is_finished
+      MAIN -->> UVICORN: TEMPLATE("done.html", job_id)
+      UVICORN -->> USER: HTTP/1.1 200 OK {done.html}
+    else job.is_failed
+      MAIN -->> UVICORN: HTTP_EXCEPTION(500)
+      UVICORN -->> USER: HTTP/1.1 500 Internal Server Error
+    else job.is_processing
+      MAIN -->> UVICORN: TEMPLATE("job.html", job_id)
+      UVICORN -->> USER: HTTP/1.1 200 OK {job.html}
+    end
+  else catch: NoSuchJobException
+    alt file.exists
+      MAIN -->> UVICORN: TEMPLATE("job.html", job_id)
+      UVICORN -->> USER: HTTP/1.1 200 OK {job.html}
+    else file.not_found
+      MAIN -->> UVICORN: HTTP_EXCEPTION(410)
+      UVICORN -->> USER: HTTP/1.1 410 Gone
+    end
+  end
+```
+
+La lógica es sencilla, simplemente se recupera el trabajo por medio de ```rq.Job::fetch()``` y se establecen los estados de error ilustrados para mantener la consistencia de la aplicación. En definitiva, este endpoint simplemente devuelve el estado del trabajo requerido, que puede estar bien en progreso, bien terminado, o bien con un estado de error.
+
+El endpoint que se encarga de proporcionar la descarga del fichero de transcripción, ```/download/{job_id}```, que tiene asociado la función ```main::download()```, cuenta con el siguiente diagrama de secuencia:
+
+```mermaid
+sequenceDiagram
+  USER ->> UVICORN: GET /download/{job_id} HTTP/1.1
+  UVICORN ->> MAIN: REQUEST URL("/download/{job_id}")
+  
+  alt try
+    alt not job.is_finished
+      MAIN -->> UVICORN: HTTP_EXCEPTION(202)
+      UVICORN -->> USER: HTTP/1.1 202 Gone
+    else
+      MAIN -->> UVICORN: FILE(file_path)
+      UVICORN -->> USER: HTTP/1.1 200 OK {file}
+    end
+  else catch: NoSuchJobException
+    alt file.exists
+      MAIN -->> UVICORN: FILE(file_path)
+      UVICORN -->> USER: HTTP/1.1 200 OK {file}
+    else file.not_found
+      MAIN -->> UVICORN: HTTP_EXCEPTION(410)
+      UVICORN -->> USER: HTTP/1.1 410 Gone
+    end
+  end
+```
+
+El endpoint restante, ```/done/{job_id}```, es bastante trivial y simplemente devuelve la vista de tarea terminada.
+
+![Vista de una tarea terminada](./docs/done.png)

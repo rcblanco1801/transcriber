@@ -94,7 +94,7 @@ async def download(job_id: str, background_tasks: BackgroundTasks):
             return FileResponse(
                 path=file_path,
                 media_type="text/plain",
-                filename=file_path.stem
+                filename=f"{file_path.stem}.txt"
             )
         raise HTTPException(410, "La transcripción ya no está disponible")
     
@@ -111,7 +111,7 @@ async def download(job_id: str, background_tasks: BackgroundTasks):
     return FileResponse(
         path=file_path,
         media_type="text/plain",
-        filename=file_path.stem
+        filename=f"{file_path.stem}.txt"
     )
 
 @app.get("/done/{job_id}", response_class=HTMLResponse)
