@@ -26,6 +26,11 @@ Hay un apunte **importante** a tener en cuenta, y es que, a nivel de uso, el usu
 
 A continuación se presenta la estructura del directorio /opt/vink desde donde cuelga todo el código del proyecto:
 
+- **/config/** Directorio donde se encuentran los ficheros de configuración de systemd.
+	- **/config/rq-worker-transcriber.service** Fichero de configuración para el worker de RQ encargado de estar a la escucha de peticiones de transcripción.
+	- **/config/transcriber.service** Fichero de configuración de la API de uvicorn.
+- **/env/** Directorio con las dependencias del proyecto.
+	- **/env/requirements.txt** Librerías de pip necesarias para el entorno virtual de python.
 - **/logs/** Para guardar logs de la aplicación.
 - **/models/** Aquí están los modelos de deep learning (sus parámetros), que se cargarán a memoria cuando sea necesario procesar una transcripción.
 - **/static/** Elementos CSS del proyecto.
