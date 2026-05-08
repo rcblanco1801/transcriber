@@ -6,7 +6,7 @@ After=network.target redis.service
 User=administrador
 WorkingDirectory=/opt/transcriber
 Environment="PYENV_ROOT=/home/administrador/.pyenv"
-Environment="HF_TOKEN=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"
+Environment="HF_TOKEN=<HF_TOKEN>""
 ExecStart=/home/administrador/.pyenv/versions/transcriptor/bin/rq worker transcriber
 Restart=always
 

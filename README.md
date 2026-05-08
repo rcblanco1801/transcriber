@@ -20,6 +20,46 @@ Hay un apunte **importante** a tener en cuenta, y es que, a nivel de uso, el usu
 | **Ruta de los ficheros de configuración de los servicios** | /etc/systemd/system/ |
 | **Ruta del entorno virtual de Python con las dependencias del proyecto** | /home/administrador/.pyenv/versions/transcriptor/ |
 
+Para lanzar la aplicación, deberemos seguir los siguientes pasos:
+
+1. Replicar el entorno virtual con ``pyenv``. Para ello, deberemos tener ``pyenv`` junto con ``pyenv-virtualenv`` en nuestro sistema debian, ejecutando lo siguiente:
+  
+  - Instalar dependencias de pyenv y pyenv-virtualenv: ``sudo apt install -y make build-essential libssl-dev zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev wget curl llvm libncurses5-dev libncursesw5-dev xz-utils tk-dev libffi-dev liblzma-dev git``
+  - Instalamos propiamente ambas herramientas: ``curl https://pyenv.run | bash``
+  - Agregar algunas líneas a la configuración de bash:
+    ``echo 'export PYENV_ROOT="$HOME/.pyenv"' >> ~/.bashrc``
+    ``echo 'command -v pyenv >/dev/null || export PATH="$PYENV_ROOT/bin:$PATH"' >> ~/.bashrc``
+    ``echo 'eval "$(pyenv init -)"' >> ~/.bashrc``
+    ``echo 'eval "$(pyenv virtualenv-init -)"' >> ~/.bashrc``
+  - Recargar la configuración: `source ~/.bashrc`
+2. Crear el propio entorno a partir del fichero ``requirements.txt``. Para ello, seguimos los siguientes pasos:
+  
+  - Creamos el entorno vacío de python 3.12: ``pyenv virtualenv 3.12 transcriptor``
+  - Activamos el entorno: ``pyenv activate transcriptor``
+  - Instalamos pip, que es la herramienta de manejo de librerías para python: ``sudo apt install pip``
+  - Comprobamos que pip esté actualizado: ``pip install --upgrade pip``
+  - Instalamos librerías con pip: ``pip install -r requirements.txt``
+
+A continuación, deberemos tener disponible este repositorio de código en la máquina debian donde deseemos ejecutar la aplicación. Los ficheros de configuración están preparados para las rutas específicas que se han mencionado antes, de manera que, si no los modificamos, el código deberá estar en ``/opt/transcriber``, y toda la carpeta deberá pertener al usuario administrador, lo cual podemos hacer con ``sudo chown -R administrador:administrador /opt/transcriber``. De la misma forma, los ficheros de configuración también están preparados para hacerlo todo con el usuario administrador, de manera que deberemos tener pyenv en su home, no en el root.
+
+Como ya veremos más adelante en los detalles de implementación, vamos a necesitar un servidor ``redis`` para mantener la cola de peticiones, así como un "worker" que esté a la escucha de dichas peticiones. Para ello, seguimos los siguientes pasos:
+- Instalamos redis con ``sudo apt install redis``
+- Copiamos el fichero de configuración del worker, ``rq-worker-transcriber.service``, a ``/etc/systemd/system``, con los permisos adecuados, ``sudo chmod 644 /etc/systemd/system/rq-worker-transcriber.service``
+- Reiniciamos el demonio de systemctl, ``sudo systemctl daemon-reload``
+- Habilitamos el servicio del worker con ``sudo systemctl enable --now rq-worker-transcriber.service``
+- Reiniciamos redis para dejarlo ejecutándose, ``sudo systemctl restart redis.service``. Llegados a este punto, posiblemente salten errores al no tener la API levantada.
+
+A continuación, tenemos que configurar el servicio de systemd que nos expone nuestra API:
+
+- Primero, copiamos el fichero de configuración ``transcriber.service`` a ``/etc/systemd/system``
+- A continuación, establecemos los permisos adecuados: ``sudo chmod 644 /etc/systemd/system/transcriber.service``
+- Recargamos el demonio de systemctl para que se dé cuenta del nuevo fichero: ``sudo sytemctl daemon-reload``
+- Lo habilitamos para que el servicio arranque siempre que la máquina también lo haga (con la opción --now para que también se inicie sin necesidad de reiniciar el servidor): ``sudo systemctl enable --now transcriber.service``. Para parar el servicio, ``sudo systemctl stop transcriber.service``, para reiniciarlo, ``sudo systemctl restart transcriber.service``
+- Comprobamos su estado con ``sudo systemctl status transcriber.service``. Otra herramienta relevante es ``journalctl`` para leer los logs y ver si se producen errores; con la orden ``sudo journalctl -fu transcriber.service`` podemos ver los logs en tiempo real, y con ``sudo journalctl -u transcriber.service -n 100`` podemos ver las últimas 100 (o las que queramos) líneas de logs.
+- Hay que tener en cuenta que el proceso lo que hace es lanzar un servidor web ``uvicorn`` desde el propio entorno de python y a través del puerto 8001, por lo que hay que asegurarse de que el puerto está expuesto.
+
+NOTA: Para la descarga de los modelos se usa un token de huggingface, eso no es necesario si se tienen en local, como los tenemos en la carpeta ``/models``, pero hace falta configurar uno si no se tienen.
+
 ## Implementación a nivel de programación
 
 ### Árbol de ficheros del proyecto

@@ -5,7 +5,6 @@ from huggingface_hub import snapshot_download
 HF_TOKEN = os.environ["HF_TOKEN"]
 BASE_DIR = pathlib.Path("models")
 REPOS = {   # repo HF  ->  subcarpeta local
-    "openai/whisper-small": "whisper-small",
     "openai/whisper-large-v3-turbo": "whisper-large-v3-turbo",
 }
 
@@ -42,7 +41,7 @@ class Transcriber:
         self._compute_type = "int8"
         self._paths = {
             "whisper-large": BASE_DIR / "whisper-large-v3-turbo",
-            "whisper-small": BASE_DIR / "whisper-small",
+            "whisper-small": BASE_DIR / "whisper-large-v3-turbo",
             "align": BASE_DIR / "voxpopuli",
         }
 

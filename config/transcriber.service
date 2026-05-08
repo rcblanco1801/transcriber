@@ -8,7 +8,7 @@ Group=administrador
 WorkingDirectory=/opt/transcriber
 # Para entornos virtuales:
 Environment="PYENV_ROOT=/home/administrador/.pyenv"
-Environment="HF_TOKEN=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"
+Environment="HF_TOKEN=<HF_TOKEN>"
 Environment="PATH=/home/administrador/.pyenv/versions/transcriptor/bin:%h/.pyenv/shims:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin"
 ExecStart=/home/administrador/.pyenv/versions/transcriptor/bin/uvicorn main:app --app-dir /opt/transcriber --host 0.0.0.0 --port 8001 --workers 1 --timeout-keep-alive 0
 Restart=always
